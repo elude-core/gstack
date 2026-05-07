@@ -110,11 +110,20 @@ jobs:
             echo "TMPDIR=/home/runner/.cache"
           } >> "$GITHUB_ENV"
 
-      # Restore pre-installed node_modules from Docker image via symlink (~0s vs ~15s install)
+      # Restore pre-installed node_modules from Docker image via hardlink copy.
+      # Why hardlinks instead of symlink: bun build (and Node module resolution
+      # in general) resolves a file's realpath when walking up to find
+      # node_modules/<dep>. With `ln -s /opt/node_modules_cache node_modules`,
+      # resolution from inside socks/build/client/socksclient.js walks the
+      # /opt/node_modules_cache/... realpath, where there is no parent
+      # node_modules dir containing smart-buffer/ip-address. With `cp -al`,
+      # each file's realpath is /workspace/node_modules/..., so sibling deps
+      # resolve correctly. Speed is comparable to symlink (hardlinks share
+      # inodes, no actual data copy).
       - name: Restore deps
         run: |
           if [ -d /opt/node_modules_cache ] && diff -q /opt/node_modules_cache/.package.json package.json >/dev/null 2>&1; then
-            ln -s /opt/node_modules_cache node_modules
+            cp -al /opt/node_modules_cache node_modules
           else
             bun install
           fi

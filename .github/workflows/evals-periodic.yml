@@ -101,10 +101,14 @@ jobs:
             echo "TMPDIR=/home/runner/.cache"
           } >> "$GITHUB_ENV"
 
+      # Hardlink copy (cp -al) instead of symlink: bun build resolves a file's
+      # realpath when looking for sibling deps, which makes a symlinked
+      # /opt/node_modules_cache fail to resolve transitive deps. See
+      # evals.yml for the full explanation.
       - name: Restore deps
         run: |
           if [ -d /opt/node_modules_cache ] && diff -q /opt/node_modules_cache/.package.json package.json >/dev/null 2>&1; then
-            ln -s /opt/node_modules_cache node_modules
+            cp -al /opt/node_modules_cache node_modules
           else
             bun install
           fi
